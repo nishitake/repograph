@@ -19,6 +19,15 @@ def parse_args() -> argparse.Namespace:
         default=".",
         help="対象の Git リポジトリのパス（デフォルト: カレントディレクトリ）",
     )
+    parser.add_argument(
+        "-o",
+        "--output",
+        help=(
+            "出力ファイル名（または出力先パス）を指定します。"
+            "拡張子なしの場合は .png を付与します。"
+            "既存のディレクトリを指定した場合は、その中に自動命名で保存します。"
+        ),
+    )
 
     date_group = parser.add_argument_group("日付範囲指定")
     date_group.add_argument(
@@ -154,6 +163,7 @@ def plot_author_stats(
     sorted_data: list[tuple[str, dict[str, int]]],
     earliest_date: datetime.datetime,
     latest_date: datetime.datetime,
+    output: str | None = None,
 ) -> str:
     repo_path_obj = pathlib.Path(repo.working_tree_dir or ".")
 
@@ -201,12 +211,20 @@ def plot_author_stats(
     date_range_str = (
         f"({earliest_date.strftime('%Y%m%d')}-" f"{latest_date.strftime('%Y%m%d')})"
     )
-    branch_name = getattr(repo.active_branch, "name", "DETACHED_HEAD")
-    png_file_name = (
-        repo_path_obj.name + "_" + branch_name + "_" + date_range_str + ".png"
+    default_png_file_name = (
+        repo_path_obj.name + "_" + date_range_str + ".png"
     )
-    fig.savefig(png_file_name)
-    return png_file_name
+
+    out_path = pathlib.Path(output) if output else pathlib.Path(default_png_file_name)
+    if output and out_path.exists() and out_path.is_dir():
+        out_path = out_path / default_png_file_name
+    if out_path.suffix == "":
+        out_path = out_path.with_suffix(".png")
+    if out_path.parent and out_path.parent != pathlib.Path("."):
+        out_path.parent.mkdir(parents=True, exist_ok=True)
+
+    fig.savefig(str(out_path))
+    return str(out_path)
 
 
 def main() -> None:
@@ -222,7 +240,11 @@ def main() -> None:
     print_author_stats(sorted_data)
 
     output_path = plot_author_stats(
-        repo, sorted_data, earliest_date=earliest_date, latest_date=latest_date
+        repo,
+        sorted_data,
+        earliest_date=earliest_date,
+        latest_date=latest_date,
+        output=args.output,
     )
     print("output:" + output_path)
 
